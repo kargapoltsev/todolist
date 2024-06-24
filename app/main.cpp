@@ -1,22 +1,124 @@
-#include "ftxui/component/component.hpp"       // for Input, Renderer, Vertical
-#include "ftxui/component/component_base.hpp"  // for ComponentBase
-#include "ftxui/component/screen_interactive.hpp"  // for Component, ScreenInteractive
-#include "ftxui/dom/elements.hpp"  // for operator|, Element, size, border, frame, vscroll_indicator, HEIGHT, LESS_THAN
+#include <iostream>
+#include <string>
+#include <vector>
+#include <fstream>
+#include <sstream>
 
-int main() {
-    using namespace ftxui;
+struct Task
+{
+    std::string title;
+    bool done = false;
+};
 
-    Component input_list = Container::Vertical({});
-    std::vector<std::string> items(100, "");
-    for (size_t i = 0; i < items.size(); ++i) {
-        input_list->Add(Input(&(items[i]), "placeholder " + std::to_string(i)));
+using Tasks = std::vector<Task>;
+
+std::string trim(std::string const& str) {
+    const auto first = str.find_first_not_of(' ');
+    if (first == std::string_view::npos) {
+        return {};
     }
+    const auto last = str.find_last_not_of(' ');
+    return str.substr(first, last - first + 1);
+}
 
-    auto renderer = Renderer(input_list, [&] {
-        return input_list->Render() | vscroll_indicator | frame | border |
-            size(HEIGHT, LESS_THAN, 10);
-        });
+int main()
+{
+    Tasks tasks;
 
-    auto screen = ScreenInteractive::TerminalOutput();
-    screen.Loop(renderer);
+    tasks.push_back({ "Some task", false });
+    tasks.push_back({ "Other task", false });
+    tasks.push_back({ "Done task", true });
+
+    std::string error;
+
+    char command;
+    while (true) {
+        if (tasks.empty())
+            std::cout << "[TODO list is empty]" << std::endl;
+
+        for (size_t i = 0; i < tasks.size(); ++i)
+            std::cout << "[" << i << "] (" << (tasks[i].done ? "X" : " ") << ") " << tasks[i].title  << std::endl;
+        
+        std::cout << std::endl;
+
+        if (!error.empty()) {
+            std::cout << "Error: " << error << "\n" << std::endl;
+            error.clear();
+        }
+
+        std::cout << "Enter command:" << std::endl;
+        std::cout << "a [name] - add new task" << std::endl;
+        std::cout << "r [task index, max " << tasks.size() << "] - remove the task" << std::endl;
+        std::cout << "d [task index, max " << tasks.size() << "] - done/reopen the task" << std::endl;
+        std::cout << "c - remove done tasks" << std::endl;
+        std::cout << "q - quit" << std::endl;
+
+        std::cout << ": ";
+        std::cin >> command;
+
+        switch (command)
+        {
+        case 'q':
+            return 0;
+
+        case 'a':
+        {
+            std::string taskName;
+            getline(std::cin, taskName);
+            if (!taskName.empty())
+                tasks.push_back({ trim(taskName), false });
+            else {
+                error = "Empty task name";
+            }
+
+            break;
+        }
+
+        case 'r':
+        {
+            if (tasks.empty())
+                break;
+
+            size_t i;
+            std::cin >> i;
+            if (i < 0 || i > tasks.size() - 1) {
+                std::stringstream ss;
+                ss << "Incorrect index - " << i;
+                error = ss.str();
+                break;
+            }
+
+            tasks.erase(std::next(tasks.begin(), i));
+            tasks.shrink_to_fit();
+            break;
+        }
+        case 'd':
+        {
+            if (tasks.empty())
+                break;
+
+            size_t i;
+            std::cin >> i;
+            if (i < 0 || i > tasks.size() - 1) {
+                std::stringstream ss;
+                ss << "Incorrect index - " << i;
+                error = ss.str();
+                break;
+            }
+
+            tasks[i].done = !tasks[i].done;
+            break;
+        }
+        case 'c':
+        {
+            auto it = std::remove_if(tasks.begin(), tasks.end(), [](Task const& t) { return t.done; });
+            tasks.erase(it, tasks.end());
+            break;
+        }
+
+        default: ;
+        }
+
+        system("cls");
+    }
 }
